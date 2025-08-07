@@ -1,0 +1,16 @@
+playbook.retry
+
+*.swp
+*.ymle
+**/.cache
+**/__pycache__
+**/.ropeproject
+pokerops-r2-*.tar.gz
+.DS_Store
+
+.venv/
+.molecule/
+.ansible/
+.devbox/
+.pyre/
+ansible_collections/

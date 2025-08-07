@@ -1,0 +1,102 @@
+---
+- name: Create Cloudflare R2 buckets
+  hosts: "_r2_node"
+  vars_files:
+    - main.yml
+  tasks:
+    - name: Manage Cloudflare R2 tasks
+      delegate_to: localhost
+      block:
+        - name: Create missing buckets
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets"
+            method: POST
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+            body_format: json
+            body:
+              locationHint: "{{ item.location_hint | default('enam') }}"
+              storageClass: "{{ item.storage_class | default('Standard') }}"
+              name: "{{ _name }}"
+          vars:
+            _name: "{{ item.name }}"
+          loop: "{{ _r2_buckets_create }}"
+          loop_control:
+            label: "{{ _name }}"
+          register: _cf_r2_buckets
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_buckets.status == 200
+          changed_when: false
+
+        - name: Update existing buckets
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}"
+            method: PATCH
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+              cf-r2-storage-class: "{{ item.storage_class | default('Standard') }}"
+          vars:
+            _name: "{{ item.name }}"
+          loop: "{{ _r2_buckets_update }}"
+          loop_control:
+            label: "{{ _name }}"
+          register: _cf_r2_buckets
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_buckets.status == 200
+          changed_when: false
+
+        - name: Create missing R2 custom domains
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _bucket_name }}/domains/custom"
+            method: POST
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+            body_format: json
+            body:
+              domain: "{{ _domain_name }}"
+              enabled: "{{ item.enabled }}"
+              zoneId: "{{ item.zone_id }}"
+              minTLS: "{{ item.tls }}"
+          vars:
+            _bucket_name: "{{ item.bucket_name }}"
+            _domain_name: "{{ item.name }}"
+          loop: "{{ _r2_custom_domains_create }}"
+          loop_control:
+            label: "{{ _bucket_name }} - {{ _domain_name }}"
+          register: _cf_r2_custom_domains
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_custom_domains.status == 200
+          changed_when: false
+
+        - name: Update existing R2 custom domains
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _bucket_name }}/domains/custom/{{ _domain_name }}"
+            method: PUT
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+            body_format: json
+            body:
+              enabled: "{{ item.enabled }}"
+              minTLS: "{{ item.tls }}"
+          vars:
+            _bucket_name: "{{ item.bucket_name }}"
+            _domain_name: "{{ item.name }}"
+          loop: "{{ _r2_custom_domains_update }}"
+          loop_control:
+            label: "{{ _bucket_name }} - {{ _domain_name }}"
+          register: _cf_r2_custom_domains
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_custom_domains.status == 200
+          changed_when: false

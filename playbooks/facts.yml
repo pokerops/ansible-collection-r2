@@ -1,0 +1,253 @@
+---
+- name: Set Cloudflare R2 facts
+  hosts: "{{ _r2_hostgroup }}"
+  vars_files:
+    - main.yml
+  tasks:
+    - name: List Cloudflare R2 buckets
+      amazon.aws.s3_bucket_info:
+        access_key: "{{ _r2_access_key_id }}"
+        region: "{{ _r2_region }}"
+        secret_key: "{{ _r2_secret_access_key }}"
+        endpoint_url: "{{ r2_endpoint_url }}"
+      delegate_to: localhost
+      register: _r2_buckets_query
+
+    - name: Set R2 bucket facts
+      ansible.builtin.set_fact:
+        _select_attrs: "{{ _select_attributes }}"
+        _drop_attrs: "{{ _drop_attributes }}"
+        _to_dict: "{{ _to_dict }}"
+        _tail: "{{ _tail }}"
+        _r2_buckets_create: "{{ _buckets_create }}"
+        _r2_buckets_update: "{{ _buckets_update }}"
+        _r2_buckets_delete: "{{ _buckets_delete }}"
+        _r2_custom_domains_create: []
+        _r2_custom_domains_update: []
+        _r2_custom_domains_delete: []
+      vars:
+        _select_attributes: "nephelaiio.plugins.select_attributes"
+        _to_dict: "nephelaiio.plugins.to_dict"
+        _tail: "nephelaiio.plugins.tail"
+        _drop_attributes: "nephelaiio.plugins.drop_attributes"
+        _defaults:
+          state: present
+          custom_domains: []
+        _buckets_ignore: "{{ _r2_buckets_ignore }}"
+        _bucket_targets: "{{ _r2_buckets | rejectattr('name', 'in', _buckets_ignore) }}"
+        _buckets_query: "{{ _r2_buckets_query.buckets | default([]) }}"
+        _buckets_all: "{{ _buckets_query | selectattr('name', 'defined') }}"
+        _bucket_existing_names: "{{ _buckets_all | map(attribute='name') | reject('in', _buckets_ignore) }}"
+        _buckets_overwritten: "{{ [_defaults] | product(_bucket_targets) | map('combine') }}"
+        _buckets_present: "{{ _buckets_overwritten | selectattr('state', 'equalto', 'present') }}"
+        _buckets_absent: "{{ _buckets_overwritten | difference(_buckets_present)}}"
+        _buckets_create: "{{ _buckets_present | rejectattr('name', 'in', _bucket_existing_names) }}"
+        _buckets_update: "{{ _buckets_present | difference(_buckets_create) }}"
+        _buckets_delete: "{{ _buckets_absent | selectattr('name', 'in', _bucket_existing_names) }}"
+
+    - name: Manage Cloudflare R2 facts
+      delegate_to: localhost
+      block:
+        - name: Get R2 custom domains
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/custom"
+            method: GET
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+          vars:
+            _name: "{{ item.name }}"
+          loop: "{{ _r2_buckets_update }}"
+          loop_control:
+            label: "{{ _name }}"
+          register: _cf_r2_custom_domains
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_custom_domains.status == 200
+          changed_when: false
+
+        - name: Query cloudflare zone metadata
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_url }}/zones?per_page={{ r2_cloudflare_page_size }}"
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+          register: _cf_zone_query
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_zone_query.status == 200
+          changed_when: false
+
+        - name: Query cloudflare zone data
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_url }}/zones?page={{ (item | int) + 1 }}&per_page={{ r2_cloudflare_page_size }}"
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+          loop: "{{ range(0, _cf_zone_query.json.result_info.total_pages) }}"
+          register: _cf_zone_data
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_zone_data.status == 200
+          changed_when: false
+          when: _cf_zone_query.json.result_info.total_pages | int != 0
+
+    - name: Set cloudflare zone facts
+      ansible.builtin.set_fact:
+        _cloudflare_zones: "{{ _cf_zones }}"
+        _r2_custom_domains_existing: "{{ _custom_domains_existing }}"
+      vars:
+        _cf_zones_all: "{{ _cf_zone_data.results | default([]) | map(attribute='json') }}"
+        _cf_zones: "{{ _cf_zones_all | map(attribute='result') | flatten | sort(attribute='name') }}"
+        _results: "{{ _cf_r2_custom_domains.results | default([]) | sort(attribute='item.name') }}"
+        _attrs:
+          - bucket_name
+          - domains
+        _bucket_names: "{{ _results | map(attribute='item.name') }}"
+        _bucket_names_dict: "{{ _bucket_names | map(_to_dict, 'bucket_name') }}"
+        _bucket_names_list: "{{ _results | zip(_bucket_names_dict) | map('combine') }}"
+        _domains: "{{ _bucket_names_list | map(attribute='json.result.domains') }}"
+        _domains_dict: "{{ _domains | map(_to_dict, 'domains') }}"
+        _custom_domains: "{{ _bucket_names_list | zip(_domains_dict) | map('combine') }}"
+        _custom_domains_existing: "{{ _custom_domains | map(_select_attrs, _attrs) }}"
+
+    - name: Set R2 create custom domain facts
+      ansible.builtin.set_fact:
+        _r2_custom_domains_create: "{{ _r2_custom_domains_create + _domains_create }}"
+      vars:
+        _defaults:
+          bucket_name: "{{ _bucket.name }}"
+          enabled: "{{ _domain.enabled | default('true') | bool }}"
+          tls: "{{ _domain.tls | default('1.2') }}"
+          zone_id: "{{ _zone_id }}"
+          state: "{{ _domain.state | default('present') }}"
+        _bucket_targets: "{{ _r2_buckets_create + _r2_buckets_update }}"
+        _custom_domains_existing: "{{ _r2_custom_domains_existing | map(attribute='domains') | flatten }}"
+        _custom_domain_names: "{{ _custom_domains_existing | map(attribute='domain') }}"
+        _bucket: "{{ item.0 }}"
+        _domain: "{{ item.1 }}"
+        _domain_defaults: "{{ _domain | combine(_defaults) }}"
+        _domains_present: "{{ [_domain_defaults] | selectattr('state', 'equalto', 'present') }}"
+        _domains_create: "{{ _domains_present | rejectattr('name', 'in', _custom_domain_names) }}"
+        _domain_name: "{{ _domain.name | split('.') | nephelaiio.plugins.tail | join('.') }}"
+        _zone_filter: "{{ _cloudflare_zones | selectattr('name', 'equalto', _domain_name) | first }}"
+        _zone_id: "{{ _zone_filter.id }}"
+      loop_control:
+        label: "Bucket: {{ _bucket.name }} - Custom domain: {{ _domain.name }}"
+      loop: "{{ _bucket_targets | subelements('custom_domains', skip_missing='true') }}"
+      when: _domains_create | length > 0
+
+    - name: Set R2 update custom domain facts
+      ansible.builtin.set_fact:
+        _r2_custom_domains_update: "{{ _r2_custom_domains_update + _domains_update }}"
+      vars:
+        _defaults:
+          bucket_name: "{{ _bucket.name }}"
+          enabled: "{{ _domain.enabled | default('true') | bool }}"
+          tls: "{{ _domain.tls | default('1.2') }}"
+          state: "{{ _domain.state | default('present') }}"
+        _bucket_targets: "{{ _r2_buckets_create + _r2_buckets_update }}"
+        _custom_domains_existing: "{{ _r2_custom_domains_existing | map(attribute='domains') | flatten }}"
+        _custom_domain_names: "{{ _custom_domains_existing | map(attribute='domain') }}"
+        _bucket: "{{ item.0 }}"
+        _domain: "{{ item.1 }}"
+        _domain_defaults: "{{ _domain | combine(_defaults) }}"
+        _domains_present: "{{ [_domain_defaults] | selectattr('state', 'equalto', 'present') }}"
+        _domains_update: "{{ _domains_present | selectattr('name', 'in', _custom_domain_names) }}"
+      loop_control:
+        label: "Bucket: {{ _bucket.name }} - Custom domain: {{ _domain.name }}"
+      loop: "{{ _bucket_targets | subelements('custom_domains', skip_missing='true') }}"
+      when: _domains_update | length > 0
+
+    - name: Set R2 delete custom domain facts
+      ansible.builtin.set_fact:
+        _r2_custom_domains_delete: "{{ _r2_custom_domains_delete + _domains_delete }}"
+      vars:
+        _defaults:
+          bucket_name: "{{ _bucket.name }}"
+          state: "{{ _domain.state | default('present') }}"
+        _bucket_targets: "{{ _r2_buckets_create + _r2_buckets_update + _r2_buckets_delete }}"
+        _custom_domains_existing: "{{ _r2_custom_domains_existing | map(attribute='domains') | flatten }}"
+        _custom_domain_names: "{{ _custom_domains_existing | map(attribute='domain') }}"
+        _bucket: "{{ item.0 }}"
+        _domain: "{{ item.1 }}"
+        _domain_defaults: "{{ _domain | combine(_defaults) }}"
+        _domains_absent: "{{ [_domain_defaults] | selectattr('state', 'equalto', 'absent') }}"
+        _domains_delete: "{{ _domains_absent | selectattr('name', 'in', _custom_domain_names) }}"
+      loop_control:
+        label: "Bucket: {{ _bucket.name }} - Custom domain: {{ _domain.name }}"
+      loop: "{{ _bucket_targets | subelements('custom_domains', skip_missing='true') }}"
+      when: _domains_delete | length > 0
+
+    - name: Debug ignore buckets
+      ansible.builtin.debug:
+        msg: "Debug R2 buckets to ignore: [{{ _r2_buckets_ignore | join(', ') }}]"
+
+    - name: Debug existing buckets
+      ansible.builtin.debug:
+        msg: "{{ _r2_buckets_update }}"
+
+    - name: Debug create buckets
+      ansible.builtin.debug:
+        msg: "{{ _r2_buckets_create }}"
+
+    - name: Debug delete buckets
+      ansible.builtin.debug:
+        msg: "Debug R2 buckets to delete: [{{ _r2_buckets_delete | join(', ') }}]"
+
+    - name: Debug create custom domains
+      ansible.builtin.debug:
+        msg: "{{ _r2_custom_domains_create }}"
+
+    - name: Debug delete custom domains
+      ansible.builtin.debug:
+        msg: "{{ _r2_custom_domains_delete }}"
+
+    - name: Debug existing custom domains
+      ansible.builtin.debug:
+        msg: "{{ _r2_custom_domains_update }}"
+
+    - name: Debug existing custom domains
+      ansible.builtin.debug:
+        msg: "{{ _r2_custom_domains_existing }}"
+
+    - name: Verify Cloudflare R2 zone name
+      ansible.builtin.assert:
+        that: _zones_filter | length == 0
+        fail_msg: "Cloudflare zone names do not exist: [{{ _zone_names | join(', ') }}]"
+      vars:
+        _custom_domains_create: "{{ _r2_custom_domains_create }}"
+        _custom_domain_names_create: "{{ _custom_domains_create | map(attribute='name') }}"
+        _custom_domain_names_existing: "{{ _r2_custom_domains_update | map(attribute='name') }}"
+        _custom_domain_names: "{{ (_custom_domain_names_existing + _custom_domain_names_create) | unique }}"
+        _domain_names_split: "{{ _custom_domain_names | map('split', '.') | map(_tail) | map('join', '.') }}"
+        _zones_filter: "{{ _cloudflare_zones | rejectattr('name', 'in', _domain_names_split) }}"
+        _zone_names: "{{ _zones_filter | map(attribute='name') }}"
+
+    - name: Verify Cloudflare R2 ignore List
+      ansible.builtin.assert:
+        that: _buckets_filter | length == 0
+        fail_msg: "Buckets within r2_buckets_ignore do not exist: [{{ _buckets_filter | join(', ') }}]"
+      vars:
+        _buckets_query: "{{ _r2_buckets_query.buckets | default([]) }}"
+        _buckets_all: "{{ _buckets_query | selectattr('name', 'defined') }}"
+        _buckets: "{{ _buckets_all | map(attribute='name') }}"
+        _buckets_ignore: "{{ _r2_buckets_ignore }}"
+        _buckets_filter: "{{ _buckets_ignore | reject('in', _buckets) }}"
+
+    - name: Verify Cloudflare R2 existing custom domains
+      ansible.builtin.assert:
+        that: _domain_filter | length == 1
+        fail_msg: |
+          {{ _domain }} custom domains cannot be moved to another bucket without being deleted first
+      vars:
+        _domain: "{{ item.name }}"
+        _bucket: "{{ item.bucket_name }}"
+        _existing: "{{ _r2_custom_domains_existing }}"
+        _bucket_filter: "{{ _existing | selectattr('bucket_name', 'equalto', _bucket) }}"
+        _existing_domains: "{{ _bucket_filter | map(attribute='domains') | flatten }}"
+        _domain_filter: "{{ _existing_domains | selectattr('domain', 'equalto', _domain) }}"
+      loop_control:
+        label: "Bucket: {{ _bucket }} - Custom domain: {{ _domain }}"
+      loop: "{{ _r2_custom_domains_update }}"

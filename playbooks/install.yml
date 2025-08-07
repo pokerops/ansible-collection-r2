@@ -1,0 +1,12 @@
+---
+- name: Run Cloudflare R2 prepare
+  ansible.builtin.import_playbook: pokerops.r2.prepare
+
+- name: Run Cloudflare R2 facts
+  ansible.builtin.import_playbook: pokerops.r2.facts
+
+- name: Run Cloudflare R2 create
+  ansible.builtin.import_playbook: pokerops.r2.create
+
+- name: Run Cloudflare R2 delete
+  ansible.builtin.import_playbook: pokerops.r2.delete

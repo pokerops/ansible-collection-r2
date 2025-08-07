@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.14.1/.schema/devbox.schema.json",
+  "packages": ["python@latest", "gnumake@latest", "uv@latest", "yq-go@latest"],
+  "shell": {
+    "init_hook": [],
+    "scripts": {}
+  }
+}

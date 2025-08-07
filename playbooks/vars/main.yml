@@ -1,0 +1,19 @@
+---
+# Defaults
+r2_endpoint_url: "https://{{ _r2_account_id }}.r2.cloudflarestorage.com"
+r2_cloudflare_api_url: "https://api.cloudflare.com/client/v4"
+r2_cloudflare_api_account_url: "{{ r2_cloudflare_api_url }}/accounts/{{ _r2_account_id }}"
+r2_cloudflare_page_size: 200
+
+# Overridable variables
+_r2_access_key_id: "{{ r2_access_key_id | default(lookup('ansible.builtin.env', 'R2_ACCESS_KEY_ID')) | default('') }}"
+_r2_secret_access_key: "{{ r2_secret_access_key | default(lookup('ansible.builtin.env', 'R2_SECRET_ACCESS_KEY')) | default('') }}"
+_r2_account_id: "{{ r2_account_id | default(lookup('ansible.builtin.env', 'R2_ACCOUNT_ID')) | default('') }}"
+_r2_region: "{{ r2_region | default(lookup('ansible.builtin.env', 'R2_REGION')) | default('auto') }}"
+_r2_buckets: "{{ r2_buckets | default([]) }}"
+_r2_hostgroup: "{{ r2_hostgroup | default('r2') }}"
+_r2_cloudflare_email: "{{ r2_cloudflare_email | default(lookup('ansible.builtin.env', 'CLOUDFLARE_EMAIL')) | default('') }}"
+_r2_cloudflare_api_token: "{{ r2_cloudflare_api_token | default(lookup('ansible.builtin.env', 'CLOUDFLARE_API_TOKEN')) | default('') }}"
+_r2_cloudflare_control_retries: "{{ r2_cloudflare_control_retries | default('2') }}"
+_r2_cloudflare_control_delay: "{{ r2_cloudflare_control_delay | default('120') }}"
+_r2_buckets_ignore: "{{ r2_buckets_ignore | default([]) }}"

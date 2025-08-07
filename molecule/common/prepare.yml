@@ -1,0 +1,17 @@
+---
+- name: Prepare
+  hosts: all
+  become: true
+  tasks:
+    - name: Manage debian pre tasks
+      when: ansible_os_family == 'Debian'
+      block:
+        - name: Update apt repos
+          ansible.builtin.apt:
+            update_cache: true
+          changed_when: false
+
+        - name: Disable unattended upgrades
+          ansible.builtin.package:
+            name: unattended-upgrades
+            state: absent

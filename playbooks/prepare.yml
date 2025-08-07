@@ -1,0 +1,23 @@
+---
+- name: Prepare Cloudflare R2 facts
+  hosts: "{{ _r2_hostgroup }}"
+  any_errors_fatal: true
+  vars_files:
+    - main.yml
+  tasks:
+    - name: Validate Cloudflare R2 variables
+      ansible.builtin.assert:
+        that:
+          - _r2_access_key_id != ""
+          - _r2_secret_access_key != ""
+          - _r2_account_id != ""
+          - _r2_cloudflare_email != ""
+          - _r2_cloudflare_api_token != ""
+          - r2_endpoint_url != ""
+        fail_msg: "Cloudflare R2 variables must be defined"
+
+    - name: Create r2 controller group
+      ansible.builtin.group_by:
+        key: "_r2_node"
+      when: inventory_hostname == (groups[_r2_hostgroup] | first)
+      changed_when: false

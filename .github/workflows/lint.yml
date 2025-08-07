@@ -1,0 +1,35 @@
+---
+name: lint
+
+env:
+  DEVBOX_VERSION: ${{ vars.DEVBOX_VERSION }}
+
+defaults:
+  run:
+    working-directory: "pokerops.r2"
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v4
+        with:
+          path: "nephelaiio.ubuntu_installer"
+
+      - name: Generate devbox locale
+        run: sudo locale-gen C.UTF-8
+
+      - name: Install devbox
+        uses: jetify-com/devbox-install-action@v0.12.0
+        with:
+          project-path: "pokerops.r2"
+
+      - name: Lint code
+        run: devbox run -- make lint

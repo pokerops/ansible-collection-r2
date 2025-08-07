@@ -1,0 +1,45 @@
+---
+- name: Delete Cloudflare R2 buckets
+  hosts: "_r2_node"
+  vars_files:
+    - main.yml
+  tasks:
+    - name: Delete R2 custom domains
+      ansible.builtin.uri:
+        url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _bucket_name }}/domains/custom/{{ _domain_name }}"
+        method: DELETE
+        headers:
+          X-Auth-Email: "{{ _r2_cloudflare_email }}"
+          Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+      vars:
+        _bucket_name: "{{ item.bucket_name }}"
+        _domain_name: "{{ item.name }}"
+      loop: "{{ _r2_custom_domains_delete }}"
+      loop_control:
+        label: "{{ _bucket_name }} - {{ _domain_name }}"
+      register: _cf_r2_custom_domains
+      retries: "{{ _r2_cloudflare_control_retries }}"
+      delay: "{{ _r2_cloudflare_control_delay }}"
+      until: _cf_r2_custom_domains.status == 200
+      changed_when: false
+
+    - name: Delete Cloudflare R2 buckets
+      delegate_to: localhost
+      block:
+        - name: Prune stale bucket objects
+          pokerops.r2.objects_delete:
+            access_key: "{{ _r2_access_key_id }}"
+            secret_key: "{{ _r2_secret_access_key }}"
+            endpoint_url: "{{ r2_endpoint_url }}"
+            bucket_name: "{{ item }}"
+          loop: "{{ _r2_buckets_delete }}"
+
+        - name: Prune stale buckets
+          amazon.aws.s3_bucket:
+            access_key: "{{ _r2_access_key_id }}"
+            region: "{{ _r2_region }}"
+            secret_key: "{{ _r2_secret_access_key }}"
+            endpoint_url: "{{ r2_endpoint_url }}"
+            name: "{{ item }}"
+            state: absent
+          loop: "{{ _r2_buckets_delete }}"
