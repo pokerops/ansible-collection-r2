@@ -51,6 +51,30 @@
           until: _cf_r2_buckets.status == 200
           changed_when: false
 
+        - name: Update managed domains
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/managed"
+            method: PUT
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+              cf-r2-storage-class: "{{ item.storage_class | default('Standard') }}"
+            body_format: json
+            body:
+              enabled: "{{ item.public | bool }}"
+          vars:
+            _buckets: "{{ _r2_buckets_create + _r2_buckets_update }}"
+            _name: "{{ item.name }}"
+          loop: "{{ _r2_buckets_update }}"
+          loop_control:
+            label: "{{ _name }}"
+          register: _cf_r2_buckets
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_buckets.status == 200
+          changed_when: false
+
         - name: Create missing R2 custom domains
           ansible.builtin.uri:
             url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _bucket_name }}/domains/custom"

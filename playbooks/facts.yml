@@ -19,6 +19,8 @@
         _drop_attrs: "{{ _drop_attributes }}"
         _to_dict: "{{ _to_dict }}"
         _tail: "{{ _tail }}"
+        _map_flatten: "{{ _map_flatten }}"
+        _alias_keys: "{{ _alias_keys }}"
         _r2_buckets_create: "{{ _buckets_create }}"
         _r2_buckets_update: "{{ _buckets_update }}"
         _r2_buckets_delete: "{{ _buckets_delete }}"
@@ -30,8 +32,11 @@
         _to_dict: "nephelaiio.plugins.to_dict"
         _tail: "nephelaiio.plugins.tail"
         _drop_attributes: "nephelaiio.plugins.drop_attributes"
+        _map_flatten: "nephelaiio.plugins.map_flatten"
+        _alias_keys: "nephelaiio.plugins.alias_keys"
         _defaults:
           state: present
+          public: false
           custom_domains: []
         _buckets_ignore: "{{ _r2_buckets_ignore }}"
         _bucket_targets: "{{ _r2_buckets | rejectattr('name', 'in', _buckets_ignore) }}"
@@ -48,7 +53,7 @@
     - name: Manage Cloudflare R2 facts
       delegate_to: localhost
       block:
-        - name: Get R2 custom domains
+        - name: Query R2 custom domains
           ansible.builtin.uri:
             url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/custom"
             method: GET
@@ -65,6 +70,25 @@
           retries: "{{ _r2_cloudflare_control_retries }}"
           delay: "{{ _r2_cloudflare_control_delay }}"
           until: _cf_r2_custom_domains.status == 200
+          changed_when: false
+
+        - name: Query R2 managed domains
+          ansible.builtin.uri:
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/managed"
+            method: GET
+            headers:
+              X-Auth-Email: "{{ _r2_cloudflare_email }}"
+              Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+          vars:
+            _name: "{{ item.name }}"
+          loop: "{{ _r2_buckets_update }}"
+          loop_control:
+            label: "{{ _name }}"
+          register: _cf_r2_managed_domains
+          retries: "{{ _r2_cloudflare_control_retries }}"
+          delay: "{{ _r2_cloudflare_control_delay }}"
+          until: _cf_r2_managed_domains.status == 200
           changed_when: false
 
         - name: Query cloudflare zone metadata
@@ -97,6 +121,7 @@
       ansible.builtin.set_fact:
         _cloudflare_zones: "{{ _cf_zones }}"
         _r2_custom_domains_existing: "{{ _custom_domains_existing }}"
+        _r2_managed_domains_existing: "{{ _managed_domains }}"
       vars:
         _cf_zones_all: "{{ _cf_zone_data.results | default([]) | map(attribute='json') }}"
         _cf_zones: "{{ _cf_zones_all | map(attribute='result') | flatten | sort(attribute='name') }}"
@@ -111,6 +136,20 @@
         _domains_dict: "{{ _domains | map(_to_dict, 'domains') }}"
         _custom_domains: "{{ _bucket_names_list | zip(_domains_dict) | map('combine') }}"
         _custom_domains_existing: "{{ _custom_domains | map(_select_attrs, _attrs) }}"
+        _managed_attrs:
+          - bucket_name
+          - public
+          - state
+          - domain
+          - bucket_id
+        _aliases:
+          item.name: bucket_name
+          item.public: public
+          item.state: state
+          json.result.domain: domain
+          json.result.bucketId: bucket_id
+        _managed_domains_all: "{{ _cf_r2_managed_domains.results | default([]) | sort(attribute='item.name') }}"
+        _managed_domains: "{{ _managed_domains_all | map(_map_flatten) | map(_alias_keys, _aliases) }}"
 
     - name: Set R2 create custom domain facts
       ansible.builtin.set_fact:
@@ -212,6 +251,10 @@
       ansible.builtin.debug:
         msg: "{{ _r2_custom_domains_existing }}"
 
+    - name: Debug managed domain buckets
+      ansible.builtin.debug:
+        msg: "{{ _r2_managed_domains_existing }}"
+
     - name: Verify Cloudflare R2 zone name
       ansible.builtin.assert:
         that: _zones_filter | length == 0
@@ -236,11 +279,25 @@
         _buckets_ignore: "{{ _r2_buckets_ignore }}"
         _buckets_filter: "{{ _buckets_ignore | reject('in', _buckets) }}"
 
-    - name: Verify Cloudflare R2 existing custom domains
+    - name: Verify Cloudflare R2 bucket public development accesses
+      ansible.builtin.assert:
+        that: _custom_domains_public_dev | length == 0
+        fail_msg: "Cloudflare R2 custom domains cannot have public development access enabled: [{{ _bucket_custom_domains | join(',') }}]"
+      vars:
+        _buckets: "{{ _r2_buckets_create + _r2_buckets_update }}"
+        _custom_domain_targets: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"
+        _custom_domain_buckets: "{{ _custom_domain_targets | map(attribute='bucket_name') }}"
+        _managed_domains: "{{ _buckets | rejectattr('name', 'in', _custom_domain_buckets) }}"
+        _custom_domains: "{{ _buckets | difference(_managed_domains) }}"
+        _custom_domains_public_dev: "{{ _custom_domains | selectattr('public') }}"
+        _bucket_custom_domains: "{{ _custom_domains_public_dev | map(attribute='name') }}"
+
+    - name: Verify Cloudflare R2 duplicated custom domains
       ansible.builtin.assert:
         that: _domain_filter | length == 1
-        fail_msg: |
-          {{ _domain }} custom domains cannot be moved to another bucket without being deleted first
+        fail_msg: >
+          {{ _domain }} custom domains cannot be duplicated or cannot be moved to
+          another bucket without being deleted first
       vars:
         _domain: "{{ item.name }}"
         _bucket: "{{ item.bucket_name }}"

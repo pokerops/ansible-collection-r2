@@ -11,6 +11,7 @@
         headers:
           X-Auth-Email: "{{ _r2_cloudflare_email }}"
           Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+          cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
       vars:
         _bucket_name: "{{ item.bucket_name }}"
         _domain_name: "{{ item.name }}"
