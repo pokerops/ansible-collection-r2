@@ -121,7 +121,6 @@
       ansible.builtin.set_fact:
         _cloudflare_zones: "{{ _cf_zones }}"
         _r2_custom_domains_existing: "{{ _custom_domains_existing }}"
-        _r2_managed_domains_existing: "{{ _managed_domains }}"
       vars:
         _cf_zones_all: "{{ _cf_zone_data.results | default([]) | map(attribute='json') }}"
         _cf_zones: "{{ _cf_zones_all | map(attribute='result') | flatten | sort(attribute='name') }}"
@@ -136,20 +135,6 @@
         _domains_dict: "{{ _domains | map(_to_dict, 'domains') }}"
         _custom_domains: "{{ _bucket_names_list | zip(_domains_dict) | map('combine') }}"
         _custom_domains_existing: "{{ _custom_domains | map(_select_attrs, _attrs) }}"
-        _managed_attrs:
-          - bucket_name
-          - public
-          - state
-          - domain
-          - bucket_id
-        _aliases:
-          item.name: bucket_name
-          item.public: public
-          item.state: state
-          json.result.domain: domain
-          json.result.bucketId: bucket_id
-        _managed_domains_all: "{{ _cf_r2_managed_domains.results | default([]) | sort(attribute='item.name') }}"
-        _managed_domains: "{{ _managed_domains_all | map(_map_flatten) | map(_alias_keys, _aliases) }}"
 
     - name: Set R2 create custom domain facts
       ansible.builtin.set_fact:
@@ -219,6 +204,27 @@
       loop: "{{ _bucket_targets | subelements('custom_domains', skip_missing='true') }}"
       when: _domains_delete | length > 0
 
+    - name: Set bucket managed domain fact
+      ansible.builtin.set_fact:
+        _r2_managed_domains_update: "{{ _managed_domains }}"
+      vars:
+        _custom_domains: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"
+        _custom_domain_buckets: "{{ _custom_domains | map(attribute='bucket_name') }}"
+        _attrs:
+          - bucket_name
+          - public
+          - domain
+          - bucket_id
+        _aliases:
+          item.name: bucket_name
+          item.public: public
+          json.result.domain: domain
+          json.result.bucketId: bucket_id
+        _managed_domains_all: "{{ _cf_r2_managed_domains.results | default([]) | sort(attribute='item.name') }}"
+        _managed_domains_flatten: "{{ _managed_domains_all | map(_map_flatten) | map(_alias_keys, _aliases) }}"
+        _managed_domain_attrs: "{{ _managed_domains_flatten | map(_select_attrs, _attrs) }}"
+        _managed_domains: "{{ _managed_domain_attrs | rejectattr('bucket_name', 'in', _custom_domain_buckets) }}"
+
     - name: Debug ignore buckets
       ansible.builtin.debug:
         msg: "Debug R2 buckets to ignore: [{{ _r2_buckets_ignore | join(', ') }}]"
@@ -253,7 +259,7 @@
 
     - name: Debug managed domain buckets
       ansible.builtin.debug:
-        msg: "{{ _r2_managed_domains_existing }}"
+        msg: "{{ _r2_managed_domains_update }}"
 
     - name: Verify Cloudflare R2 zone name
       ansible.builtin.assert:
@@ -287,8 +293,9 @@
         _buckets: "{{ _r2_buckets_create + _r2_buckets_update }}"
         _custom_domain_targets: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"
         _custom_domain_buckets: "{{ _custom_domain_targets | map(attribute='bucket_name') }}"
-        _managed_domains: "{{ _buckets | rejectattr('name', 'in', _custom_domain_buckets) }}"
-        _custom_domains: "{{ _buckets | difference(_managed_domains) }}"
+        _managed_domains: "{{ _r2_managed_domains_update }}"
+        _managed_domain_names: "{{ _managed_domains | map(attribute='bucket_name') }}"
+        _custom_domains: "{{ _buckets | rejectattr('name', 'in', _managed_domain_names) }}"
         _custom_domains_public_dev: "{{ _custom_domains | selectattr('public') }}"
         _bucket_custom_domains: "{{ _custom_domains_public_dev | map(attribute='name') }}"
 
