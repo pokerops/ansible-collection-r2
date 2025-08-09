@@ -24,6 +24,7 @@
         _r2_buckets_create: "{{ _buckets_create }}"
         _r2_buckets_update: "{{ _buckets_update }}"
         _r2_buckets_delete: "{{ _buckets_delete }}"
+        _r2_buckets_existing: "{{ _bucket_existing_names }}"
         _r2_custom_domains_create: []
         _r2_custom_domains_update: []
         _r2_custom_domains_delete: []
@@ -38,6 +39,7 @@
           state: present
           public: false
           custom_domains: []
+          bucket_paths: []
         _buckets_ignore: "{{ _r2_buckets_ignore }}"
         _bucket_targets: "{{ _r2_buckets | rejectattr('name', 'in', _buckets_ignore) }}"
         _buckets_query: "{{ _r2_buckets_query.buckets | default([]) }}"
@@ -55,17 +57,12 @@
       block:
         - name: Query R2 custom domains
           ansible.builtin.uri:
-            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/custom"
+            url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ item }}/domains/custom"
             method: GET
             headers:
               X-Auth-Email: "{{ _r2_cloudflare_email }}"
               Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
-              cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
-          vars:
-            _name: "{{ item.name }}"
-          loop: "{{ _r2_buckets_update }}"
-          loop_control:
-            label: "{{ _name }}"
+          loop: "{{ _r2_buckets_existing }}"
           register: _cf_r2_custom_domains
           retries: "{{ _r2_cloudflare_control_retries }}"
           delay: "{{ _r2_cloudflare_control_delay }}"
@@ -117,18 +114,18 @@
           changed_when: false
           when: _cf_zone_query.json.result_info.total_pages | int != 0
 
-    - name: Set cloudflare zone facts
+    - name: Set cloudflare zones and existing R2 facts
       ansible.builtin.set_fact:
         _cloudflare_zones: "{{ _cf_zones }}"
         _r2_custom_domains_existing: "{{ _custom_domains_existing }}"
       vars:
         _cf_zones_all: "{{ _cf_zone_data.results | default([]) | map(attribute='json') }}"
         _cf_zones: "{{ _cf_zones_all | map(attribute='result') | flatten | sort(attribute='name') }}"
-        _results: "{{ _cf_r2_custom_domains.results | default([]) | sort(attribute='item.name') }}"
+        _results: "{{ _cf_r2_custom_domains.results | default([]) | sort(attribute='item') }}"
         _attrs:
           - bucket_name
           - domains
-        _bucket_names: "{{ _results | map(attribute='item.name') }}"
+        _bucket_names: "{{ _results | map(attribute='item') }}"
         _bucket_names_dict: "{{ _bucket_names | map(_to_dict, 'bucket_name') }}"
         _bucket_names_list: "{{ _results | zip(_bucket_names_dict) | map('combine') }}"
         _domains: "{{ _bucket_names_list | map(attribute='json.result.domains') }}"
@@ -190,7 +187,7 @@
       vars:
         _defaults:
           bucket_name: "{{ _bucket.name }}"
-          state: "{{ _domain.state | default('present') }}"
+          state: "{{ _domain.state | default(_bucket.state) }}"
         _bucket_targets: "{{ _r2_buckets_create + _r2_buckets_update + _r2_buckets_delete }}"
         _custom_domains_existing: "{{ _r2_custom_domains_existing | map(attribute='domains') | flatten }}"
         _custom_domain_names: "{{ _custom_domains_existing | map(attribute='domain') }}"
@@ -239,7 +236,7 @@
 
     - name: Debug delete buckets
       ansible.builtin.debug:
-        msg: "Debug R2 buckets to delete: [{{ _r2_buckets_delete | join(', ') }}]"
+        msg: "{{ _r2_buckets_delete }}"
 
     - name: Debug create custom domains
       ansible.builtin.debug:
@@ -253,10 +250,6 @@
       ansible.builtin.debug:
         msg: "{{ _r2_custom_domains_update }}"
 
-    - name: Debug existing custom domains
-      ansible.builtin.debug:
-        msg: "{{ _r2_custom_domains_existing }}"
-
     - name: Debug managed domain buckets
       ansible.builtin.debug:
         msg: "{{ _r2_managed_domains_update }}"
@@ -267,12 +260,14 @@
         fail_msg: "Cloudflare zone names do not exist: [{{ _zone_names | join(', ') }}]"
       vars:
         _custom_domains_create: "{{ _r2_custom_domains_create }}"
+        _custom_domains_update: "{{ _r2_custom_domains_update }}"
         _custom_domain_names_create: "{{ _custom_domains_create | map(attribute='name') }}"
         _custom_domain_names_existing: "{{ _r2_custom_domains_update | map(attribute='name') }}"
         _custom_domain_names: "{{ (_custom_domain_names_existing + _custom_domain_names_create) | unique }}"
         _domain_names_split: "{{ _custom_domain_names | map('split', '.') | map(_tail) | map('join', '.') }}"
         _zones_filter: "{{ _cloudflare_zones | rejectattr('name', 'in', _domain_names_split) }}"
         _zone_names: "{{ _zones_filter | map(attribute='name') }}"
+      when: (_custom_domains_create | length > 0) or (_custom_domains_update | length > 0)
 
     - name: Verify Cloudflare R2 ignore List
       ansible.builtin.assert:

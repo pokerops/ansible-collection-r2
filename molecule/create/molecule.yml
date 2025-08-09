@@ -30,15 +30,11 @@ provisioner:
     group_vars:
       all:
         r2_buckets:
-          - name: molecule
+          - name: molecule_custom
             custom_domains:
               - name: molecule.wpnops.dev
-          - name: bla
-          - name: ouch
-            custom_domains:
-              - name: test.wpnops.dev
-          - name: duh
-            custom_domains:
-              - name: test1.wpnops.dev
+          - name: molecule_private
+          - name: molecule_public
+            public: true
 verifier:
   name: ansible

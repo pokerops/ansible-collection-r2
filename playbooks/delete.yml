@@ -32,7 +32,11 @@
             access_key: "{{ _r2_access_key_id }}"
             secret_key: "{{ _r2_secret_access_key }}"
             endpoint_url: "{{ r2_endpoint_url }}"
-            bucket_name: "{{ item }}"
+            bucket_name: "{{ _name }}"
+          vars:
+            _name: "{{ item.name }}"
+          loop_control:
+            label: "{{ _name }}"
           loop: "{{ _r2_buckets_delete }}"
 
         - name: Prune stale buckets
@@ -41,6 +45,10 @@
             region: "{{ _r2_region }}"
             secret_key: "{{ _r2_secret_access_key }}"
             endpoint_url: "{{ r2_endpoint_url }}"
-            name: "{{ item }}"
+            name: "{{ _name }}"
             state: absent
+          vars:
+            _name: "{{ item.name }}"
+          loop_control:
+            label: "{{ _name }}"
           loop: "{{ _r2_buckets_delete }}"
