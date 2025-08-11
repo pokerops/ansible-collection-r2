@@ -29,12 +29,13 @@ provisioner:
   inventory:
     group_vars:
       all:
+        bucket_prefix: molecule-create
         r2_buckets:
-          - name: molecule_custom
+          - name: "{{ bucket_prefix}}-custom"
             custom_domains:
               - name: molecule.wpnops.dev
-          - name: molecule_private
-          - name: molecule_public
+          - name: "{{ bucket_prefix }}-private"
+          - name: "{{ bucket_prefix }}-public"
             public: true
 verifier:
   name: ansible

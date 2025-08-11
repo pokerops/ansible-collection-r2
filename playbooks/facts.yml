@@ -254,21 +254,6 @@
       ansible.builtin.debug:
         msg: "{{ _r2_managed_domains_update }}"
 
-    - name: Verify Cloudflare R2 zone name
-      ansible.builtin.assert:
-        that: _zones_filter | length == 0
-        fail_msg: "Cloudflare zone names do not exist: [{{ _zone_names | join(', ') }}]"
-      vars:
-        _custom_domains_create: "{{ _r2_custom_domains_create }}"
-        _custom_domains_update: "{{ _r2_custom_domains_update }}"
-        _custom_domain_names_create: "{{ _custom_domains_create | map(attribute='name') }}"
-        _custom_domain_names_existing: "{{ _r2_custom_domains_update | map(attribute='name') }}"
-        _custom_domain_names: "{{ (_custom_domain_names_existing + _custom_domain_names_create) | unique }}"
-        _domain_names_split: "{{ _custom_domain_names | map('split', '.') | map(_tail) | map('join', '.') }}"
-        _zones_filter: "{{ _cloudflare_zones | rejectattr('name', 'in', _domain_names_split) }}"
-        _zone_names: "{{ _zones_filter | map(attribute='name') }}"
-      when: (_custom_domains_create | length > 0) or (_custom_domains_update | length > 0)
-
     - name: Verify Cloudflare R2 ignore List
       ansible.builtin.assert:
         that: _buckets_filter | length == 0
@@ -280,19 +265,36 @@
         _buckets_ignore: "{{ _r2_buckets_ignore }}"
         _buckets_filter: "{{ _buckets_ignore | reject('in', _buckets) }}"
 
-    - name: Verify Cloudflare R2 bucket public development accesses
-      ansible.builtin.assert:
-        that: _custom_domains_public_dev | length == 0
-        fail_msg: "Cloudflare R2 custom domains cannot have public development access enabled: [{{ _bucket_custom_domains | join(',') }}]"
-      vars:
-        _buckets: "{{ _r2_buckets_create + _r2_buckets_update }}"
-        _custom_domain_targets: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"
-        _custom_domain_buckets: "{{ _custom_domain_targets | map(attribute='bucket_name') }}"
-        _managed_domains: "{{ _r2_managed_domains_update }}"
-        _managed_domain_names: "{{ _managed_domains | map(attribute='bucket_name') }}"
-        _custom_domains: "{{ _buckets | rejectattr('name', 'in', _managed_domain_names) }}"
-        _custom_domains_public_dev: "{{ _custom_domains | selectattr('public') }}"
-        _bucket_custom_domains: "{{ _custom_domains_public_dev | map(attribute='name') }}"
+    - name: Verify Cloudflare R2 custom domain validation tasks
+      when: (_r2_custom_domains_create | length > 0) or (_r2_custom_domains_update | length > 0)
+      block:
+        - name: Verify Cloudflare R2 zone name
+          ansible.builtin.assert:
+            that: _zones_filter | length == 0
+            fail_msg: "Cloudflare zone names do not exist: [{{ _zone_names | join(', ') }}]"
+          vars:
+            _custom_domains_create: "{{ _r2_custom_domains_create }}"
+            _custom_domains_update: "{{ _r2_custom_domains_update }}"
+            _custom_domain_names_create: "{{ _custom_domains_create | map(attribute='name') }}"
+            _custom_domain_names_existing: "{{ _r2_custom_domains_update | map(attribute='name') }}"
+            _custom_domain_names: "{{ (_custom_domain_names_existing + _custom_domain_names_create) | unique }}"
+            _domain_names_split: "{{ _custom_domain_names | map('split', '.') | map(_tail) | map('join', '.') }}"
+            _zones_filter: "{{ _cloudflare_zones | rejectattr('name', 'in', _domain_names_split) }}"
+            _zone_names: "{{ _zones_filter | map(attribute='name') }}"
+
+        - name: Verify Cloudflare R2 bucket public development accesses
+          ansible.builtin.assert:
+            that: _custom_domains_public_dev | length == 0
+            fail_msg: "Cloudflare R2 custom domains cannot have public development access enabled: [{{ _bucket_custom_domains | join(',') }}]"
+          vars:
+            _buckets: "{{ _r2_buckets_create + _r2_buckets_update }}"
+            _custom_domain_targets: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"
+            _custom_domain_buckets: "{{ _custom_domain_targets | map(attribute='bucket_name') }}"
+            _managed_domains: "{{ _r2_managed_domains_update }}"
+            _managed_domain_names: "{{ _managed_domains | map(attribute='bucket_name') }}"
+            _custom_domains: "{{ _buckets | rejectattr('name', 'in', _managed_domain_names) }}"
+            _custom_domains_public_dev: "{{ _custom_domains | selectattr('public') }}"
+            _bucket_custom_domains: "{{ _custom_domains_public_dev | map(attribute='name') }}"
 
     - name: Verify Cloudflare R2 duplicated custom domains
       ansible.builtin.assert:
