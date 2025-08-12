@@ -4,6 +4,8 @@ from typing import Optional
 import boto3
 import botocore
 
+MAX_DELETE = 1000
+
 DOCUMENTATION = """
     module: status
     short_description: Custom plugin to delete Cloudflare R2 objects
@@ -31,8 +33,8 @@ DOCUMENTATION = """
             type: str
 """
 
-def delete_objects(access_key=str, secret_key=str, endpoint_url=str, bucket_name=str, 
-                   region=None):
+def delete_objects(access_key: str, endpoint_url: str, secret_key: str, bucket_name: str, 
+                   region: str = "auto"):
 
     session_args = dict(
         service_name = "s3",
@@ -49,26 +51,24 @@ def delete_objects(access_key=str, secret_key=str, endpoint_url=str, bucket_name
     s3_buckets = [bucket["Name"] for bucket in s3_buckets_response["Buckets"]]
 
     changed = False
-    deleted_objects = dict(
-        deleted = []
-    )
+    deleted_objects = []
+
     if bucket_name in s3_buckets:
         paginator = s3.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=bucket_name)
+        pages = paginator.paginate(Bucket=bucket_name)
         objects = []
 
-        for page in page_iterator:
+        for page in pages:
             if "Contents" in page:
                 objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
-                response = s3.delete_objects(Bucket=bucket_name, Delete={"Objects": objects})
-                objects.append(response)
-                changed = True
 
-        deleted_objects["deleted"] = [
-            obj["Key"]
-            for response in objects
-            for obj in response.get("Deleted", [])
-        ]
+                for i in range(0, len(objects), MAX_DELETE):
+                    chunk = objects[i:i+MAX_DELETE]
+                    if not chunk:
+                        continue
+                    resp = s3.delete_objects(Bucket=bucket_name, Delete={"Objects": chunk, "Quiet": True})
+                    deleted_objects += [d.get("Key") for d in resp.get("Deleted", [])]
+                changed = True
 
         msg = "Objects were deleted" if changed else "There are no objects to delete"
 
@@ -81,8 +81,8 @@ def run_module():
 
     module_args = {
         "region": {"default": "auto", "type": "str"},
-        "access_key": {"required": True, "type": "str"},
-        "secret_key": {"required": True, "type": "str"},
+        "access_key": {"required": True, "type": "str", "no_log": True},
+        "secret_key": {"required": True, "type": "str", "no_log": True},
         "bucket_name": {"required": True, "type": "str"},
         "endpoint_url": {"required": True, "type": "str"}
     }
