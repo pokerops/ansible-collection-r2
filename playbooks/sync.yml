@@ -1,0 +1,133 @@
+---
+- name: Import pokerops.r2.prepare playbook
+  ansible.builtin.import_playbook: pokerops.r2.prepare
+
+- name: Import pokerops.r2.facts playbook
+  ansible.builtin.import_playbook: pokerops.r2.facts
+
+- name: Manage Cloudflare R2 sync tasks
+  hosts: "{{ _r2_hostgroup }}"
+  any_errors_fatal: true
+  vars_files:
+    - main.yml
+  vars:
+    r2_file_sync_retries: "{{ (_r2_file_sync_timeout | int) / (_r2_file_sync_delay | int) }}"
+  tasks:
+    - name: Check and initialize play facts
+      tags: always
+      block:
+        - name: Verify Cloudflare R2 buckets
+          ansible.builtin.assert:
+            that:
+              - _r2_buckets | rejectattr('name', 'in', _existing_names) | length == 0
+              - (_paths_local | length) == (_bucket_paths | length)
+              - (_paths_remote | length) == (_bucket_paths | length)
+          vars:
+            _buckets: "{{ _r2_buckets_update }}"
+            _existing_names: "{{ _buckets | map(attribute='name') }}"
+            _bucket_paths: "{{ _buckets | map(attribute='bucket_paths') | flatten }}"
+            _paths_remote: "{{ _bucket_paths | map(attribute='remote') }}"
+            _paths_local: "{{ _bucket_paths | map(attribute='local') }}"
+
+        - name: Install virtualenv
+          ansible.builtin.package:
+            name: "{{ _package }}"
+          vars:
+            _package: "{{ (ansible_os_family == 'Debian') | ternary('virtualenv', 'python-virtualenv') }}"
+          become: true
+
+        - name: Create virtualenv
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: virtualenv
+          register: _virtualenv_tmpdir
+
+        - name: Set virtualenv facts
+          ansible.builtin.set_fact:
+            _virtualenv_path: "{{ _path }}"
+            _virtualenv_python: "{{ _python }}"
+          vars:
+            _path: "{{ _virtualenv_tmpdir.path }}/venv"
+            _python: "{{ _path }}/bin/python"
+
+        - name: Initialize virtualenv
+          ansible.builtin.pip:
+            name:
+              - boto3
+              - botocore
+              - python-dateutil
+            virtualenv: "{{ _virtualenv_path }}"
+
+        - name: Change python interpreter
+          ansible.builtin.set_fact:
+            ansible_python_interpreter: "{{ _virtualenv_python }}"
+
+    - name: Manage S3 assets
+      block:
+        - name: Set R2 sync fact
+          ansible.builtin.set_fact:
+            _r2_sync_targets: "{{ _targets }}"
+          vars:
+            _targets: "{{ _r2_buckets_update | subelements('bucket_paths', skip_missing=True) }}"
+
+        - name: Stat R2 sync sources
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop: "{{ _r2_sync_targets | map('last') | map(attribute='local') }}"
+          register: _sync_stat
+
+        - name: Set sync stat facts
+          ansible.builtin.set_fact:
+            _r2_sync_sources: "{{ _sync_results | map(attribute='item') }}"
+          vars:
+            _sync_results: "{{ _sync_stat.results | selectattr('stat.exists', 'equalto', true) }}"
+            _sync_raw: "{{ _sync_results| map(attribute='item') }}"
+            _sync_items: "{{ _sync_results | selectattr('stat.exists', 'equalto', true) }}"
+
+        - name: Start R2 folder sync operations
+          community.aws.s3_sync:
+            bucket: "{{ _bucket_name }}"
+            access_key: "{{ _r2_access_key_id }}"
+            region: "{{ _r2_region }}"
+            secret_key: "{{ _r2_secret_access_key }}"
+            endpoint_url: "{{ r2_endpoint_url }}"
+            key_prefix: "{{ _remote }}"
+            file_root: "{{ _local }}"
+            file_change_strategy: "{{ _strategy }}"
+            validate_certs: "{{ _bucket.validate_certs | default('true') | bool }}"
+            permission: "{{ _bucket.permission | default('public-read') }}"
+            delete: "{{ _path.delete | default('false') | bool }}"
+            include: "{{ _path.include_pattern | default(omit) }}"
+            exclude: "{{ _path.exclude_pattern | default(omit) }}"
+          vars:
+            _bucket: "{{ item.0 }}"
+            _path: "{{ item.1 }}"
+            _bucket_name: "{{ _bucket.name }}"
+            _remote: "{{ _path.remote }}"
+            _local: "{{ _path.local }}"
+            _strategy: "{{ _path.change_strategy | default('checksum') }}"
+          loop_control:
+            label: "{{ _bucket_name }}/{{ _remote }}"
+          loop: "{{ _r2_sync_targets }}"
+          when: _local in _r2_sync_sources
+          register: _r2_sync_async
+          async: "{{ _r2_file_sync_timeout }}"
+          poll: 0
+
+        - name: Wait for R2 sync operations to complete
+          ansible.builtin.async_status:
+            jid: "{{ item }}"
+          vars:
+            _sync_jobs: "{{ _r2_sync_async.results | selectattr('ansible_job_id', 'defined') }}"
+          register: _r2_sync
+          retries: "{{ r2_file_sync_retries }}"
+          delay: "{{ _r2_file_sync_delay }}"
+          until: _r2_sync.finished
+          loop: "{{ _sync_jobs | map(attribute='ansible_job_id') }}"
+
+      always:
+        - name: Destroy virtualenv
+          ansible.builtin.file:
+            path: "{{ _virtualenv_tmpdir.path }}"
+            state: absent
+          tags: always

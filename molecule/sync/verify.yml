@@ -1,0 +1,44 @@
+---
+- name: Get r2 objects
+  hosts: "localhost"
+  tasks:
+    - name: Get r2 objects
+      amazon.aws.s3_object_info:
+        bucket_name: "{{ _bucket_name }}"
+        access_key: "{{ lookup('ansible.builtin.env', 'R2_ACCESS_KEY_ID') }}"
+        region: "{{ lookup('ansible.builtin.env', 'R2_REGION') }}"
+        secret_key: "{{ lookup('ansible.builtin.env', 'R2_SECRET_ACCESS_KEY') }}"
+        endpoint_url: "https://{{ _r2_account_id }}.r2.cloudflarestorage.com"
+      vars:
+        _r2_account_id: "{{ lookup('ansible.builtin.env', 'R2_ACCOUNT_ID') }}"
+        _buckets_state: "{{ r2_buckets | selectattr('state', 'defined') }}"
+        _buckets_absent: "{{ _buckets_state | rejectattr('state', 'equalto', 'absent') }}"
+        _bucket_names_absent: "{{ _buckets_absent }}"
+        _buckets: "{{ r2_buckets | rejectattr('name', 'in', _bucket_names_absent) }}"
+        _bucket_name: "{{ item.name }}"
+      register: _r2_objects_query
+      loop_control:
+        label: "{{ _bucket_name }}"
+      loop: "{{ _buckets }}"
+
+    - name: Set r2 object facts
+      ansible.builtin.set_fact:
+        _r2_existing_objects: "{{ _objects | map(_basename) }}"
+        _r2_target_objects: "{{ _target_objects | map(_basename)}}"
+      vars:
+        _target_objects: "{{ hostvars['localhost']['_r2_sync_temp_path'] }}"
+        _basename: "ansible.builtin.basename"
+        _results: "{{ _r2_objects_query.results | default([]) }}"
+        _objects: "{{ _results | map(attribute='s3_keys') | flatten }}"
+
+    - name: Debug target R2 objects
+      ansible.builtin.debug:
+        msg: "{{ _r2_target_objects }}"
+
+    - name: Debug existing R2 objects
+      ansible.builtin.debug:
+        msg: "{{ _r2_existing_objects }}"
+
+    - name: Verify pokerops.r2.sync playbook tasks
+      ansible.builtin.assert:
+        that: _r2_target_objects | reject('in', _r2_existing_objects) | length == 0

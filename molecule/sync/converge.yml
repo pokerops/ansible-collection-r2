@@ -1,0 +1,39 @@
+---
+- name: Create tempfiles
+  hosts: "r2"
+  tasks:
+    - name: Create temporal path
+      ansible.builtin.file:
+        path: "{{ item.local }}"
+        state: directory
+      vars:
+        _paths: "{{ r2_buckets | map(attribute='bucket_paths') | flatten }}"
+      loop: "{{ _paths }}"
+
+    - name: Create temporal files
+      ansible.builtin.tempfile:
+        path: "{{ item.local }}"
+        state: file
+        prefix: sync.
+      vars:
+        _paths: "{{ r2_buckets | map(attribute='bucket_paths') | flatten }}"
+      loop: "{{ _paths }}"
+      register: _r2_files
+
+    - name: Set temp path fact
+      ansible.builtin.set_fact:
+        _r2_sync_temp_path: "{{ _paths }}"
+      vars:
+        _results: "{{ _r2_files.results | default([]) }}"
+        _paths: "{{ _results | map(attribute='path') | flatten }}"
+      delegate_to: localhost
+      delegate_facts: true
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install
+
+- name: Import r2 sync playbook
+  ansible.builtin.import_playbook: pokerops.r2.sync
+
+- name: Import verify playbook
+  ansible.builtin.import_playbook: ./verify.yml
