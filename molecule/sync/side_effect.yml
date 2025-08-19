@@ -1,0 +1,37 @@
+---
+- name: Override R2 sync paths
+  hosts: "all"
+  tasks:
+    - name: Set temp path fact
+      ansible.builtin.set_fact:
+        r2_buckets:
+          - name: molecule-sync
+            public: true
+            bucket_paths:
+              - local: /tmp/molecule
+                remote: test
+                delete: true
+      delegate_to: localhost
+      delegate_facts: true
+
+- name: Import r2 sync playbook
+  ansible.builtin.import_playbook: pokerops.r2.sync
+  vars:
+    r2_virtualenv_destroy: false
+
+- name: Import verify playbook
+  ansible.builtin.import_playbook: ./verify.yml
+
+- name: Delete cloudflare R2 buckets
+  hosts: "all"
+  tasks:
+    - name: Set temp path fact
+      ansible.builtin.set_fact:
+        r2_buckets: "{{ _buckets }}"
+      vars:
+        _defaults:
+          state: absent
+        _buckets: "{{ [_defaults] | product(r2_buckets) | map('combine') }}"
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install

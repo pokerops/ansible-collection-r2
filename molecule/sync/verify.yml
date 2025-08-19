@@ -12,7 +12,6 @@
         endpoint_url: "{{ r2_endpoint_url }}"
         bucket_name: "{{ _bucket_name }}"
       vars:
-        _r2_account_id: "{{ lookup('ansible.builtin.env', 'R2_ACCOUNT_ID') }}"
         _buckets_state: "{{ r2_buckets | selectattr('state', 'defined') }}"
         _buckets_absent: "{{ _buckets_state | rejectattr('state', 'equalto', 'absent') }}"
         _bucket_names_absent: "{{ _buckets_absent }}"
@@ -25,11 +24,18 @@
 
     - name: Set r2 object facts
       ansible.builtin.set_fact:
+        _r2_existing_paths: "{{ _objects | map(_dirname) | unique }}"
         _r2_existing_objects: "{{ _objects | map(_basename) }}"
-        _r2_target_objects: "{{ _target_objects | map(_basename)}}"
+        _r2_target_objects: "{{ _target_objects | map(_basename) }}"
+        _r2_target_paths: "{{ _target_paths_overwritten }}"
       vars:
+        _default:
+          delete: false
         _target_objects: "{{ hostvars['localhost']['_r2_sync_temp_path'] }}"
+        _target_paths: "{{ _r2_buckets | map(attribute='bucket_paths') | flatten }}"
+        _target_paths_overwritten: "{{ [_default] | product(_target_paths) | map('combine') }}"
         _basename: "ansible.builtin.basename"
+        _dirname: "ansible.builtin.dirname"
         _results: "{{ _r2_objects_query.results | default([]) }}"
         _objects: "{{ _results | map(attribute='s3_keys') | flatten }}"
 
@@ -41,20 +47,16 @@
       ansible.builtin.debug:
         msg: "{{ _r2_existing_objects }}"
 
+    - name: Debug target R2 paths
+      ansible.builtin.debug:
+        msg: "{{ _r2_target_paths }}"
+
+    - name: Debug existing R2 paths
+      ansible.builtin.debug:
+        msg: "{{ _r2_existing_paths }}"
+
     - name: Verify pokerops.r2.sync playbook tasks
       ansible.builtin.assert:
-        that: _r2_target_objects | reject('in', _r2_existing_objects) | length == 0
-
-- name: Delete cloudflare R2 buckets
-  hosts: "all"
-  tasks:
-    - name: Set temp path fact
-      ansible.builtin.set_fact:
-        r2_buckets: "{{ _buckets }}"
-      vars:
-        _defaults:
-          state: absent
-        _buckets: "{{ [_defaults] | product(r2_buckets) | map('combine') }}"
-
-- name: Import r2 install playbook
-  ansible.builtin.import_playbook: pokerops.r2.install
+        that:
+          - _r2_target_objects | reject('in', _r2_existing_objects) | length == 0
+          - _r2_target_paths | rejectattr('remote', 'in', _r2_existing_paths) | length == 0

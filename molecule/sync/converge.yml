@@ -1,6 +1,6 @@
 ---
 - name: Create tempfiles
-  hosts: "r2"
+  hosts: "all"
   tasks:
     - name: Create temporal path
       ansible.builtin.file:
@@ -39,3 +39,6 @@
 
 - name: Import verify playbook
   ansible.builtin.import_playbook: ./verify.yml
+
+- name: Import side effect playbook
+  ansible.builtin.import_playbook: ./side_effect.yml
