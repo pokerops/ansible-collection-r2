@@ -8,10 +8,20 @@ on:
   pull_request:
     branches:
       - master
+    paths:
+      - "molecule/**"
+      - "playbooks/**"
+      - "requirements.yml"
+      - "Makefile"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "devbox.json"
+      - "devbox.lock"
+      - .github/workflows/molecule.yml
 
-defaults:
-  run:
-    working-directory: "pokerops.r2"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   molecule:
@@ -20,32 +30,23 @@ jobs:
     strategy:
       matrix:
         scenario:
-          - name: default
+          - create
+          - sync
         image:
           - name: ubuntu2204
             command: /lib/systemd/systemd
-          - name: ubuntu2004
+          - name: debian12
             command: /lib/systemd/systemd
-          - name: debian11
-            command: /lib/systemd/systemd
-          - name: centos8
-            command: /usr/lib/systemd/systemd
     steps:
       - name: Check out the codebase
         uses: actions/checkout@v4
         with:
           path: "pokerops.r2"
 
-      - name: Generate devbox locale
-        run: sudo locale-gen C.UTF-8
-
       - name: Install devbox
-        uses: jetify-com/devbox-install-action@v0.12.0
+        uses: jetify-com/devbox-install-action@v0.13.0
         with:
-          project-path: "pokerops.r2"
-
-      - name: Debug test environment
-        run: devbox run -- make debug
+          enable-cache: true
 
       - name: Run molecule tests.
         run: devbox run make test
@@ -54,4 +55,4 @@ jobs:
           ANSIBLE_FORCE_COLOR: "1"
           MOLECULE_DOCKER_IMAGE: ${{ matrix.image.name }}
           MOLECULE_DOCKER_COMMAND: ${{ matrix.image.command }}
-          MOLECULE_SCENARIO: ${{ matrix.scenario.name }}
+          MOLECULE_SCENARIO: ${{ matrix.scenario }}
