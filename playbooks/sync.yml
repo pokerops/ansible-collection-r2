@@ -130,4 +130,4 @@
           ansible.builtin.file:
             path: "{{ _virtualenv_tmpdir.path }}"
             state: absent
-          tags: always
+          when: r2_virtualenv_destroy | default('true') | bool

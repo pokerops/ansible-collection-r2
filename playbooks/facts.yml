@@ -295,6 +295,7 @@
             _custom_domains: "{{ _buckets | rejectattr('name', 'in', _managed_domain_names) }}"
             _custom_domains_public_dev: "{{ _custom_domains | selectattr('public') }}"
             _bucket_custom_domains: "{{ _custom_domains_public_dev | map(attribute='name') }}"
+          when: _managed_domains | length > 0
 
     - name: Verify Cloudflare R2 duplicated custom domains
       ansible.builtin.assert:

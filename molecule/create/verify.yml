@@ -1,0 +1,95 @@
+---
+- name: Verify R2 buckets
+  hosts: "localhost"
+  vars_files:
+    - ../../playbooks/vars/main.yml
+  tasks:
+    - name: List Cloudflare R2 buckets
+      amazon.aws.s3_bucket_info:
+        access_key: "{{ _r2_access_key_id }}"
+        region: "{{ _r2_region }}"
+        secret_key: "{{ _r2_secret_access_key }}"
+        endpoint_url: "{{ r2_endpoint_url }}"
+      register: _r2_buckets_query
+
+    - name: Set R2 bucket facts
+      ansible.builtin.set_fact:
+        _r2_bucket_targets: "{{ _present }}"
+        _r2_buckets_existing: "{{ _buckets_all }}"
+      vars:
+        _defaults:
+          state: present
+          public: false
+          custom_domains: []
+          bucket_paths: []
+        _buckets_query: "{{ _r2_buckets_query.buckets | default([]) }}"
+        _buckets_all: "{{ _buckets_query | selectattr('name', 'defined') }}"
+        _existing_names: "{{ _buckets_all | map(attribute='name') }}"
+        _bucket_targets: "{{ [_defaults] | product(_r2_buckets) | map('combine') }}"
+        _present: "{{ _bucket_targets | selectattr('state', 'equalto', 'present') }}"
+
+    - name: Query R2 managed domains
+      ansible.builtin.uri:
+        url: "{{ r2_cloudflare_api_account_url }}/r2/buckets/{{ _name }}/domains/managed"
+        method: GET
+        headers:
+          X-Auth-Email: "{{ _r2_cloudflare_email }}"
+          Authorization: "Bearer {{ _r2_cloudflare_api_token }}"
+          cf-r2-jurisdiction: "{{ item.jurisdiction | default('default') }}"
+      vars:
+        _name: "{{ item.name }}"
+      loop: "{{ _r2_bucket_targets }}"
+      loop_control:
+        label: "{{ _name }}"
+      register: _cf_r2_managed_domains
+      retries: "{{ _r2_cloudflare_control_retries }}"
+      delay: "{{ _r2_cloudflare_control_delay }}"
+      until: _cf_r2_managed_domains.status == 200
+      changed_when: false
+
+    - name: Set bucket managed domain fact
+      ansible.builtin.set_fact:
+        _r2_managed_domains: "{{ _managed_domains }}"
+      vars:
+        _map_flatten: "nephelaiio.plugins.map_flatten"
+        _alias_keys: "nephelaiio.plugins.alias_keys"
+        _select_attrs: "nephelaiio.plugins.select_attributes"
+        _attrs:
+          - bucket_name
+          - public
+          - domain
+          - bucket_id
+        _aliases:
+          item.name: bucket_name
+          item.public: public
+          json.result.domain: domain
+          json.result.bucketId: bucket_id
+        _managed_domains_all: "{{ _cf_r2_managed_domains.results | default([]) | sort(attribute='item.name') }}"
+        _managed_domains_flatten: "{{ _managed_domains_all | map(_map_flatten) | map(_alias_keys, _aliases) }}"
+        _managed_domains: "{{ _managed_domains_flatten | map(_select_attrs, _attrs) }}"
+
+    - name: Debug R2 bucket targets
+      ansible.builtin.debug:
+        msg: "{{ _r2_bucket_targets }}"
+
+    - name: Debug R2 existing buckets
+      ansible.builtin.debug:
+        msg: "{{ _r2_buckets_existing }}"
+
+    - name: Debug R2 managed buckets
+      ansible.builtin.debug:
+        msg: "{{ _r2_managed_domains }}"
+
+    - name: Verify R2 buckets
+      ansible.builtin.assert:
+        that:
+          - _bucket_targets | rejectattr('name', 'in', _bucket_existing_names) | length == 0
+          - (_bucket_targets | length) == (_buckets_existing | length)
+          - (_public_bucket_targets | length) == (_public_buckets_existing | length)
+      vars:
+        _bucket_targets: "{{ _r2_bucket_targets }}"
+        _buckets_existing: "{{ _r2_buckets_existing }}"
+        _managed_buckets: "{{ _r2_managed_domains }}"
+        _bucket_existing_names: "{{ _r2_buckets_existing | map(attribute='name') }}"
+        _public_bucket_targets: "{{ _bucket_targets | selectattr('public') }}"
+        _public_buckets_existing: "{{ _managed_buckets | selectattr('public') }}"

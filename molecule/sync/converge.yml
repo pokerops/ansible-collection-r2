@@ -34,6 +34,8 @@
 
 - name: Import r2 sync playbook
   ansible.builtin.import_playbook: pokerops.r2.sync
+  vars:
+    r2_virtualenv_destroy: false
 
 - name: Import verify playbook
   ansible.builtin.import_playbook: ./verify.yml

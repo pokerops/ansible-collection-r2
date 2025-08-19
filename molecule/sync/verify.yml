@@ -1,14 +1,16 @@
 ---
 - name: Get r2 objects
   hosts: "localhost"
+  vars_files:
+    - ../../playbooks/vars/main.yml
   tasks:
     - name: Get r2 objects
       amazon.aws.s3_object_info:
+        access_key: "{{ _r2_access_key_id }}"
+        region: "{{ _r2_region }}"
+        secret_key: "{{ _r2_secret_access_key }}"
+        endpoint_url: "{{ r2_endpoint_url }}"
         bucket_name: "{{ _bucket_name }}"
-        access_key: "{{ lookup('ansible.builtin.env', 'R2_ACCESS_KEY_ID') }}"
-        region: "{{ lookup('ansible.builtin.env', 'R2_REGION') }}"
-        secret_key: "{{ lookup('ansible.builtin.env', 'R2_SECRET_ACCESS_KEY') }}"
-        endpoint_url: "https://{{ _r2_account_id }}.r2.cloudflarestorage.com"
       vars:
         _r2_account_id: "{{ lookup('ansible.builtin.env', 'R2_ACCOUNT_ID') }}"
         _buckets_state: "{{ r2_buckets | selectattr('state', 'defined') }}"
@@ -42,3 +44,17 @@
     - name: Verify pokerops.r2.sync playbook tasks
       ansible.builtin.assert:
         that: _r2_target_objects | reject('in', _r2_existing_objects) | length == 0
+
+- name: Delete cloudflare R2 buckets
+  hosts: "all"
+  tasks:
+    - name: Set temp path fact
+      ansible.builtin.set_fact:
+        r2_buckets: "{{ _buckets }}"
+      vars:
+        _defaults:
+          state: absent
+        _buckets: "{{ [_defaults] | product(r2_buckets) | map('combine') }}"
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install

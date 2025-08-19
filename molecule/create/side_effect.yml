@@ -1,0 +1,63 @@
+---
+- name: Override R2 bucket facts
+  hosts: "all"
+  tasks:
+    - name: Set R2 bucket facts
+      ansible.builtin.set_fact:
+        r2_buckets:
+          - name: "{{ bucket_prefix}}-custom"
+            custom_domains:
+              - name: molecule.wpnops.dev
+          - name: "{{ bucket_prefix }}-private"
+            state: absent
+          - name: "{{ bucket_prefix }}-public"
+            public: true
+      vars:
+        _hosts: "{{ play_hosts + ['localhost'] }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ _hosts }}"
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install
+
+- name: Import verify
+  ansible.builtin.import_playbook: ./verify.yml
+
+- name: Override R2 bucket facts
+  hosts: "all"
+  tasks:
+    - name: Set R2 bucket facts
+      ansible.builtin.set_fact:
+        r2_buckets:
+          - name: "{{ bucket_prefix}}-custom"
+            custom_domains:
+              - name: molecule.wpnops.dev
+          - name: "{{ bucket_prefix }}-private"
+            state: absent
+          - name: "{{ bucket_prefix }}-public"
+      vars:
+        _hosts: "{{ play_hosts + ['localhost'] }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ _hosts }}"
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install
+
+- name: Import verify
+  ansible.builtin.import_playbook: ./verify.yml
+
+- name: Delete cloudflare R2 buckets
+  hosts: "all"
+  tasks:
+    - name: Set temp path fact
+      ansible.builtin.set_fact:
+        r2_buckets: "{{ _buckets }}"
+      vars:
+        _defaults:
+          state: absent
+        _buckets: "{{ [_defaults] | product(r2_buckets) | map('combine') }}"
+
+- name: Import r2 install playbook
+  ansible.builtin.import_playbook: pokerops.r2.install
