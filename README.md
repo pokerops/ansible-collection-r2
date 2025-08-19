@@ -7,7 +7,7 @@
 [![Ansible Galaxy](https://img.shields.io/badge/dynamic/json?color=blueviolet&label=pokerops/r2&query=%24.summary_fields.versions%5B0%5D.name&url=https%3A%2F%2Fgalaxy.ansible.com%2Fapi%2Fv1%2Froles%2F<galaxy_id>%2F%3Fformat%3Djson)](https://galaxy.ansible.com/pokerops/r2/)
  -->
 
-An [ansible role](https://galaxy.ansible.com/pokerops/r2) to install and configure r2
+An [ansible role](https://galaxy.ansible.com/pokerops/r2) to create and configure Cloudflare R2
 
 ## Role Variables
 
@@ -21,8 +21,8 @@ By default this role does not depend on any external roles. If any such dependen
 
 - hosts: servers
   roles:
-     - role: pokerops.r2
-       r2_package_state: latest
+  - role: pokerops.r2
+    r2_package_state: latest
 
 ## Testing
 
@@ -30,12 +30,12 @@ Please make sure your environment has [docker](https://www.docker.com) installed
 
 Role is tested against the following distributions (docker images):
 
-  * Ubuntu Focal
-  * Ubuntu Jammy
-  * Debian Buster
-  * Debian Bullseye
+- Ubuntu Focal
+- Ubuntu Jammy
+- Debian Buster
+- Debian Bullseye
 
-You can test the role directly from sources using command ` molecule test `
+You can test the role directly from sources using command `molecule test`
 
 ## License
 
