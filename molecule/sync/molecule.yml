@@ -29,8 +29,9 @@ provisioner:
   inventory:
     group_vars:
       all:
+        bucket_prefix: molecule-sync
         r2_buckets:
-          - name: molecule-sync
+          - name: "{{ bucket_prefix }}"
             public: true
             bucket_paths:
               - local: /tmp/molecule

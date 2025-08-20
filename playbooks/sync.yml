@@ -11,7 +11,7 @@
   vars_files:
     - main.yml
   vars:
-    r2_file_sync_retries: "{{ (_r2_file_sync_timeout | int) / (_r2_file_sync_delay | int) }}"
+    r2_object_sync_retries: "{{ (_r2_object_sync_timeout | int) / (_r2_object_sync_delay | int) }}"
   tasks:
     - name: Check and initialize play facts
       tags: always
@@ -112,7 +112,7 @@
           loop: "{{ _r2_sync_targets }}"
           when: _local in _r2_sync_sources
           register: _r2_sync_async
-          async: "{{ _r2_file_sync_timeout }}"
+          async: "{{ _r2_object_sync_timeout }}"
           poll: 0
 
         - name: Wait for R2 sync operations to complete
@@ -121,8 +121,8 @@
           vars:
             _sync_jobs: "{{ _r2_sync_async.results | selectattr('ansible_job_id', 'defined') }}"
           register: _r2_sync
-          retries: "{{ r2_file_sync_retries }}"
-          delay: "{{ _r2_file_sync_delay }}"
+          retries: "{{ r2_object_sync_retries }}"
+          delay: "{{ _r2_object_sync_delay }}"
           until: _r2_sync.finished
           loop: "{{ _sync_jobs | map(attribute='ansible_job_id') }}"
 
