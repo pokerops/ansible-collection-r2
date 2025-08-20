@@ -29,7 +29,7 @@ provisioner:
   inventory:
     group_vars:
       all:
-        bucket_prefix: "molecule-sync-{{ ansible_distribution }}"
+        bucket_prefix: "molecule-sync-{{ ansible_distribution | lower }}"
         r2_buckets:
           - name: "{{ bucket_prefix }}"
             public: true
