@@ -54,3 +54,8 @@ jobs:
           MOLECULE_DOCKER_IMAGE: ${{ matrix.image.name }}
           MOLECULE_DOCKER_COMMAND: ${{ matrix.image.command }}
           MOLECULE_SCENARIO: ${{ matrix.scenario }}
+          R2_ACCOUNT_ID: "${{ secrets.R2_ACCOUNT_ID }}"
+          R2_ACCESS_KEY_ID: "${{ secrets.R2_ACCESS_KEY_ID }}"
+          R2_SECRET_ACCESS_KEY: "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          CLOUDFLARE_EMAIL: "${{ secrets.CLOUDFLARE_EMAIL }}"
+          CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}"
