@@ -1,12 +1,18 @@
 .PHONY: all ${MAKECMDGOALS}
 
-MOLECULE_SCENARIO ?= default
+MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+MAKEFILE_DIR := $(dir $(MAKEFILE_PATH))
+
+MOLECULE_SCENARIO ?= create
 MOLECULE_DOCKER_IMAGE ?= ubuntu2204
 GALAXY_API_KEY ?=
 GITHUB_REPOSITORY ?= $$(git config --get remote.origin.url | cut -d':' -f 2 | cut -d. -f 1)
 GITHUB_ORG = $$(echo ${GITHUB_REPOSITORY} | cut -d/ -f 1)
 GITHUB_REPO = $$(echo ${GITHUB_REPOSITORY} | cut -d/ -f 2)
 REQUIREMENTS = requirements.yml
+COLLECTION_NAMESPACE = $$(yq -r '.namespace' < galaxy.yml)
+COLLECTION_NAME = $$(yq -r '.name' < galaxy.yml)
+COLLECTION_VERSION = $$(yq -r '.version' < galaxy.yml)
 
 all: install version lint test
 
@@ -17,18 +23,16 @@ install:
 	@uv sync
 
 lint: requirements
-	uv run yamllint .
-	uv run ansible-lint .
+	uv run yamllint . -c .yamllint
+	ANSIBLE_COLLECTIONS_PATH=$(MAKEFILE_DIR) \
+	uv run ansible-lint -p playbooks/ --exclude ".ansible/*"
 
-roles:
-	[ -f ${REQUIREMENTS} ] && yq '.$@[] | .name' -r < ${REQUIREMENTS} \
-		| xargs -L1 uv run ansible-galaxy role install --force || exit 0
-
-collections:
-	[ -f ${REQUIREMENTS} ] && yq '.$@[] | .name' -r < ${REQUIREMENTS} \
-		| xargs -L1 uv run ansible-galaxy -vvv collection install --force || exit 0
-
-requirements: install roles collections
+requirements: install
+	@python --version
+	ANSIBLE_COLLECTIONS_PATH=$(MAKEFILE_DIR) \
+	uv run ansible-galaxy collection install \
+		--force-with-deps .
+	@find ./ -name "*.ymle*" -delete
 
 dependency create prepare converge idempotence side-effect verify destroy login reset:
 	MOLECULE_DOCKER_IMAGE=${MOLECULE_DOCKER_IMAGE} uv run molecule $@ -s ${MOLECULE_SCENARIO}

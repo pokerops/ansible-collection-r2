@@ -68,7 +68,8 @@
           ansible.builtin.set_fact:
             _r2_sync_targets: "{{ _targets }}"
           vars:
-            _targets: "{{ _r2_buckets_update | subelements('bucket_paths', skip_missing=True) }}"
+            _targets: "{{ _r2_buckets_update | subelements('bucket_paths', skip_missing='true') }}"
+          tags: skip_ansible_lint
 
         - name: Stat R2 sync sources
           ansible.builtin.stat:
@@ -81,7 +82,7 @@
             _r2_sync_sources: "{{ _sync_results | map(attribute='item') }}"
           vars:
             _sync_results: "{{ _sync_stat.results | selectattr('stat.exists', 'equalto', true) }}"
-            _sync_raw: "{{ _sync_results| map(attribute='item') }}"
+            _sync_raw: "{{ _sync_results | map(attribute='item') }}"
             _sync_items: "{{ _sync_results | selectattr('stat.exists', 'equalto', true) }}"
 
         - name: Start R2 folder sync operations

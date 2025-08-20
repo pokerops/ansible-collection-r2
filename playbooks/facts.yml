@@ -47,7 +47,7 @@
         _bucket_existing_names: "{{ _buckets_all | map(attribute='name') | reject('in', _buckets_ignore) }}"
         _buckets_overwritten: "{{ [_defaults] | product(_bucket_targets) | map('combine') }}"
         _buckets_present: "{{ _buckets_overwritten | selectattr('state', 'equalto', 'present') }}"
-        _buckets_absent: "{{ _buckets_overwritten | difference(_buckets_present)}}"
+        _buckets_absent: "{{ _buckets_overwritten | difference(_buckets_present) }}"
         _buckets_create: "{{ _buckets_present | rejectattr('name', 'in', _bucket_existing_names) }}"
         _buckets_update: "{{ _buckets_present | difference(_buckets_create) }}"
         _buckets_delete: "{{ _buckets_absent | selectattr('name', 'in', _bucket_existing_names) }}"
