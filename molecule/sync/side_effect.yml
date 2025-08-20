@@ -5,7 +5,7 @@
     - name: Set temp path fact
       ansible.builtin.set_fact:
         r2_buckets:
-          - name: molecule-sync
+          - name: "{{ bucket_prefix }}"
             public: true
             bucket_paths:
               - local: /tmp/molecule

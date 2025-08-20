@@ -29,7 +29,7 @@ provisioner:
   inventory:
     group_vars:
       all:
-        bucket_prefix: molecule-sync
+        bucket_prefix: "molecule-sync-${MOLECULE_DOCKER_IMAGE:-ubuntu2204}"
         r2_buckets:
           - name: "{{ bucket_prefix }}"
             public: true

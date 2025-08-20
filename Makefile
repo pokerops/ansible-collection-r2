@@ -34,8 +34,17 @@ requirements: install
 		--force-with-deps .
 	@find ./ -name "*.ymle*" -delete
 
+ifeq (login,$(firstword $(MAKECMDGOALS)))
+    LOGIN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+    $(eval $(subst $(space),,$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))):;@:)
+endif
+
 dependency create prepare converge idempotence side-effect verify destroy login reset:
-	MOLECULE_DOCKER_IMAGE=${MOLECULE_DOCKER_IMAGE} uv run molecule $@ -s ${MOLECULE_SCENARIO}
+	ANSIBLE_COLLECTIONS_PATH=$(MAKEFILE_DIR) \
+	MOLECULE_REVISION=${MOLECULE_REVISION} \
+	MOLECULE_KVM_IMAGE=${MOLECULE_KVM_IMAGE} \
+	MOLECULE_DOCKER_IMAGE=${MOLECULE_DOCKER_IMAGE} \
+	uv run molecule $@ -s ${MOLECULE_SCENARIO} ${LOGIN_ARGS}
 
 rebuild: destroy prepare create
 
@@ -46,11 +55,8 @@ clean: destroy reset
 	uv env remove $$(which python)
 
 publish: install
-	@echo publishing repository ${GITHUB_REPOSITORY}
-	@echo GITHUB_ORGANIZATION=${GITHUB_ORG}
-	@echo GITHUB_REPOSITORY=${GITHUB_REPO}
-	@uv run ansible-galaxy role import \
-		--api-key ${GALAXY_API_KEY} ${GITHUB_ORG} ${GITHUB_REPO}
+	uv run ansible-galaxy collection publish --api-key ${GALAXY_API_KEY} \
+		"${COLLECTION_NAMESPACE}-${COLLECTION_NAME}-${COLLECTION_VERSION}.tar.gz"
 
 version: install
 	@uv run molecule --version
