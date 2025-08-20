@@ -13,6 +13,8 @@ tags:
   - r2
 dependencies:
   "nephelaiio.plugins": "*"
+  "amazon.aws": "*"
+  "community.aws": "*"
 repository: http://github.com/pokerops/ansible-collection-r2
 documentation: http://github.com/pokerops/ansible-collection-r2
 homepage: http://github.com/pokerops/ansible-collection-r2
