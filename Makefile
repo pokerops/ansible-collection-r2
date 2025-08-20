@@ -46,11 +46,8 @@ clean: destroy reset
 	uv env remove $$(which python)
 
 publish: install
-	@echo publishing repository ${GITHUB_REPOSITORY}
-	@echo GITHUB_ORGANIZATION=${GITHUB_ORG}
-	@echo GITHUB_REPOSITORY=${GITHUB_REPO}
-	@uv run ansible-galaxy role import \
-		--api-key ${GALAXY_API_KEY} ${GITHUB_ORG} ${GITHUB_REPO}
+	uv run ansible-galaxy collection publish --api-key ${GALAXY_API_KEY} \
+		"${COLLECTION_NAMESPACE}-${COLLECTION_NAME}-${COLLECTION_VERSION}.tar.gz"
 
 version: install
 	@uv run molecule --version
