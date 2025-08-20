@@ -15,7 +15,7 @@
     - name: Set R2 bucket facts
       ansible.builtin.set_fact:
         _r2_bucket_targets: "{{ _present }}"
-        _r2_buckets_existing: "{{ _buckets_all }}"
+        _r2_buckets_existing: "{{ _buckets_all | selectattr('name', 'match', bucket_prefix) }}"
       vars:
         _defaults:
           state: present

@@ -2,12 +2,10 @@
 extends: default
 
 ignore: |
-  .ansible/
-  .venv/
   .devbox/
+  .venv/
   .ansible/
   ansible_collections/
-  molecule/
   roles/
   *.j2.yml
 
@@ -18,11 +16,12 @@ rules:
   brackets:
     max-spaces-inside: 1
     level: error
-  line-length: disable
+  line-length:
+    max: 160
   truthy: disable
   comments-indentation: false
   comments:
     min-spaces-from-content: 1
   octal-values:
     forbid-implicit-octal: true
-    forbid-explicit-octal: true truthy: disable
+    forbid-explicit-octal: true

@@ -17,5 +17,5 @@ _r2_cloudflare_api_token: "{{ r2_cloudflare_api_token | default(lookup('ansible.
 _r2_cloudflare_control_retries: "{{ r2_cloudflare_control_retries | default('2') }}"
 _r2_cloudflare_control_delay: "{{ r2_cloudflare_control_delay | default('120') }}"
 _r2_buckets_ignore: "{{ r2_buckets_ignore | default([]) }}"
-_r2_file_sync_timeout: "{{ r2_file_sync_timeout | default(1200) }}"
-_r2_file_sync_delay: "{{ r2_file_sync_delay | default(20) }}"
+_r2_object_sync_timeout: "{{ r2_object_sync_timeout | default(1200) }}"
+_r2_object_sync_delay: "{{ r2_object_sync_delay | default(20) }}"

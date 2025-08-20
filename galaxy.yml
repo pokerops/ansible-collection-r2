@@ -20,3 +20,6 @@ issues: http://github.com/pokerops/ansible-collection-r2/issues
 build_ignore:
   - .devbox
   - .venv
+  - ansible_collections
+  - .ansible
+  - .git
