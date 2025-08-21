@@ -7,7 +7,7 @@
         r2_buckets:
           - name: "{{ bucket_prefix}}-custom"
             custom_domains:
-              - name: molecule.wpnops.dev
+              - name: "{{ bucket_prefix }}.wpnops.dev"
           - name: "{{ bucket_prefix }}-private"
             state: absent
           - name: "{{ bucket_prefix }}-public"

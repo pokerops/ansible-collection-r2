@@ -299,7 +299,7 @@
 
     - name: Verify Cloudflare R2 duplicated custom domains
       ansible.builtin.assert:
-        that: _domain_filter | length == 1
+        that: _domain_filter | length <= 1
         fail_msg: >
           {{ _domain }} custom domains cannot be duplicated or cannot be moved to
           another bucket without being deleted first
@@ -312,4 +312,4 @@
         _domain_filter: "{{ _existing_domains | selectattr('domain', 'equalto', _domain) }}"
       loop_control:
         label: "Bucket: {{ _bucket }} - Custom domain: {{ _domain }}"
-      loop: "{{ _r2_custom_domains_update }}"
+      loop: "{{ _r2_custom_domains_update + _r2_custom_domains_create }}"

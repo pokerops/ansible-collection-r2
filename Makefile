@@ -54,7 +54,10 @@ ignore:
 clean: destroy reset
 	uv env remove $$(which python)
 
-publish: install
+build: requirements
+	@uv run ansible-galaxy collection build --force
+
+publish: build
 	uv run ansible-galaxy collection publish --api-key ${GALAXY_API_KEY} \
 		"${COLLECTION_NAMESPACE}-${COLLECTION_NAME}-${COLLECTION_VERSION}.tar.gz"
 
