@@ -1,7 +1,7 @@
 ---
 namespace: pokerops
 name: r2
-version: 0.0.2
+version: 0.0.3
 readme: README.md
 authors:
   - Carlos Gonzalez <43476850+carlosgo13@users.noreply.github.com>

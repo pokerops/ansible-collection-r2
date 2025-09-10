@@ -11,7 +11,7 @@
   vars_files:
     - main.yml
   vars:
-    r2_object_sync_retries: "{{ (_r2_object_sync_timeout | int) / (_r2_object_sync_delay | int) }}"
+    r2_object_sync_retries: "{{ ((_r2_object_sync_timeout | int) / (_r2_object_sync_delay | int)) | int }}"
   tasks:
     - name: Check and initialize play facts
       tags: always
