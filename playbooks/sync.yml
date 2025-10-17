@@ -8,6 +8,7 @@
 - name: Manage Cloudflare R2 sync tasks
   hosts: "{{ _r2_hostgroup }}"
   any_errors_fatal: true
+  become: true
   vars_files:
     - main.yml
   vars:
@@ -19,7 +20,7 @@
         - name: Verify Cloudflare R2 buckets
           ansible.builtin.assert:
             that:
-              - _r2_buckets | rejectattr('name', 'in', _existing_names) | length == 0
+              - _r2_buckets_present | rejectattr('name', 'in', _existing_names) | length == 0
               - (_paths_local | length) == (_bucket_paths | length)
               - (_paths_remote | length) == (_bucket_paths | length)
           vars:

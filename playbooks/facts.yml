@@ -21,6 +21,7 @@
         _tail: "{{ _tail }}"
         _map_flatten: "{{ _map_flatten }}"
         _alias_keys: "{{ _alias_keys }}"
+        _r2_buckets_present: "{{ _buckets_present }}"
         _r2_buckets_create: "{{ _buckets_create }}"
         _r2_buckets_update: "{{ _buckets_update }}"
         _r2_buckets_delete: "{{ _buckets_delete }}"
